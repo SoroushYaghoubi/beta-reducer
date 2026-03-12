@@ -9,6 +9,7 @@ import "core:unicode"
 
 MOD_UPPER :: false
 MOD_INTERNALS :: false
+MOD_QUIT :: true
 
 format :: proc(r : rune) -> rune {
 	when MOD_UPPER {
@@ -125,8 +126,10 @@ main :: proc() {
 		n, _ := os.read(os.stdin, buf[:])
 		code := string(buf[:n])
 		code = strings.trim_space(code);
-		if code == "q" {
-			return
+		when MOD_QUIT {
+			if code == "q" {
+				return
+			}
 		}
 
 		beta_reduced := parse(code)
