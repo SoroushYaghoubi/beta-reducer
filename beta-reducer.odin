@@ -5,6 +5,18 @@ package main
 import "core:strings"
 import "core:os"
 import "core:fmt"
+import "core:unicode"
+
+MOD_UPPER :: false
+MOD_INTERNALS :: false
+
+format :: proc(r : rune) -> rune {
+	when MOD_UPPER {
+		return unicode.to_upper(r)
+	} else {
+		return r
+	}
+}
 
 /*
 	# Only supporing these runes rn:
@@ -37,9 +49,10 @@ EXPR :: union {
 	ABS,
 }
 
-reduce :: proc(expr : string) -> EXPR {
+parse :: proc(expr : string) -> EXPR {
 	if len(expr) == 1 {
-		return VAR{cast(rune)expr[0]}
+		v_ := format(cast(rune)expr[0])
+		return VAR{v_}
 	}
 
 	// ( \ x . M )
@@ -47,9 +60,10 @@ reduce :: proc(expr : string) -> EXPR {
 	//     2    4
 	if expr[1] == '\\' {
 		M := new(EXPR)
-		M^ = reduce(expr[4:len(expr)-1])
+		M^ = parse(expr[4:len(expr)-1])
 
-		return ABS{VAR{ cast(rune)expr[2] }, M}
+		v_ := format(cast(rune)expr[2])
+		return ABS{VAR{ v_ }, M}
 	}
 
 	// case 1:
@@ -65,14 +79,15 @@ reduce :: proc(expr : string) -> EXPR {
 		M_closing := findClosing(expr, 1)
 		M := new(EXPR)
 		N := new(EXPR)
-		M^ = reduce(expr[1:M_closing])
-		N^ = reduce(expr[M_closing+1:len(expr)-1])
+		M^ = parse(expr[1:M_closing+1])
+		N^ = parse(expr[M_closing+1:len(expr)-1])
 		return APP{M, N}
 	case:
+		v_ := format(cast(rune)expr[1])
 		v := new(EXPR)
-		v^ = VAR{cast(rune)expr[1]}
+		v^ = VAR{ v_ }
 		M := new(EXPR)
-		M^ = reduce(expr[2:len(expr)-1])
+		M^ = parse(expr[2:len(expr)-1])
 		return APP{v, M}
 	}
 
@@ -104,14 +119,26 @@ main :: proc() {
 	fmt.println()
 	buf: [64]byte
 
-	fmt.print("> ")
-	n, _ := os.read(os.stdin, buf[:])
-	code := string(buf[:n])
-	code = strings.trim_space(code);
 
-	beta_reduced := reduce(code)
+	for {
+		fmt.print("> ")
+		n, _ := os.read(os.stdin, buf[:])
+		code := string(buf[:n])
+		code = strings.trim_space(code);
+		if code == "q" {
+			return
+		}
 
-	log(beta_reduced)
+		beta_reduced := parse(code)
+
+		fmt.print("-> ")
+		log(beta_reduced)
+		fmt.println()
+		when MOD_INTERNALS {
+			fmt.println("-> ", beta_reduced)
+		}
+		fmt.println()
+	}
 }
 
 // 
