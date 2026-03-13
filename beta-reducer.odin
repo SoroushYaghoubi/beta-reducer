@@ -25,7 +25,7 @@ format :: proc(r : rune) -> rune {
 		. ( )
 
 	# λ-expressions
-		a, b, c, ..., z
+		a, b, c, ... y, z
 		(\a.M)
 		(M M)
 */
@@ -67,15 +67,10 @@ parse :: proc(expr : string) -> EXPR {
 		return ABS{VAR{ v_ }, M}
 	}
 
-	// case 1:
-		// ( M          N )
-		//   ^           ^
-		//   1   M_closing+1
-	// case 2:
-		// ( x   M )
-		//   ^   ^
-		//   1    2
 	switch expr[1] {
+	// ( M          N )
+	//   ^           ^
+	//   1   M_closing+1
 	case '(':
 		M_closing := findClosing(expr, 1)
 		M := new(EXPR)
@@ -83,6 +78,9 @@ parse :: proc(expr : string) -> EXPR {
 		M^ = parse(expr[1:M_closing+1])
 		N^ = parse(expr[M_closing+1:len(expr)-1])
 		return APP{M, N}
+	// ( x   M )
+	//   ^   ^
+	//   1    2
 	case:
 		v_ := format(cast(rune)expr[1])
 		v := new(EXPR)
@@ -91,11 +89,97 @@ parse :: proc(expr : string) -> EXPR {
 		M^ = parse(expr[2:len(expr)-1])
 		return APP{v, M}
 	}
-
+	
 	// unsupported case
-	fmt.eprintfln("Couldn't match any lambda expressions.")
+	fmt.eprintfln("Couldn't parse lambda expression.")
 	return VAR{' '}
 }
+
+reduce :: proc(expr : EXPR) -> EXPR {
+	#partial switch e in expr {
+	case ABS:
+		M := new(EXPR)
+		M^ = reduce(e.M^)
+		return EXPR(ABS{e.x, M})
+	case APP:
+		switch t in e.L {
+		case ABS:
+			return substitute(t.M^, t.x.x, reduce(e.R^))
+		case VAR:
+			M := new(EXPR)
+			N := new(EXPR)
+			M^ = t
+			N^ = reduce(e.R^)
+			return EXPR(APP{M, N})
+		case APP:
+			L := new(EXPR)
+			R := new(EXPR)
+			L^ = reduce(e.L^)
+			R^ = reduce(e.R^)
+			return EXPR(APP{L, R})
+		}
+	}
+
+	return expr
+}
+
+// ((\x.(\x.(\y.a)))m)
+substitute :: proc(expr : EXPR, param : rune, sub_expr : EXPR) -> EXPR {
+	switch e in expr {
+	case VAR: 
+		if e.x == param {
+			return sub_expr
+		}
+	case APP:
+		L_substituted := new(EXPR)
+		R_substituted := new(EXPR)
+		L_substituted^ = substitute(e.L^, param, sub_expr)
+		R_substituted^ = substitute(e.R^, param, sub_expr)
+		return EXPR(APP{ L_substituted, R_substituted })
+	case ABS:
+		if e.x.x == param {
+			return expr
+		}
+		M_substituted := new(EXPR)
+		M_substituted^ = substitute(e.M^, param, sub_expr)
+		return EXPR(ABS{ e.x, M_substituted })
+	}
+
+	return expr
+}
+
+main :: proc() {
+	fmt.println()
+	buf: [64]byte
+
+	for {
+		fmt.print("> ")
+		n, _ := os.read(os.stdin, buf[:])
+		expr := string(buf[:n])
+		expr = strings.trim_space(expr);
+		when MOD_QUIT {
+			if expr == "q" {
+				return
+			}
+		}
+
+		parsed_expr := parse(expr)
+
+		fmt.print("-> ")
+		log(parsed_expr)
+		fmt.println()
+		reduced_expr := reduce(parsed_expr)
+		log(reduced_expr)
+		when MOD_INTERNALS {
+			fmt.println("-> ", parsed_expr)
+		}
+		fmt.println()
+	}
+}
+
+// 
+// H E L P E R     F U N C T I O N S
+// 
 
 log :: proc(expr : EXPR) {
 	switch t in expr {
@@ -115,38 +199,6 @@ log :: proc(expr : EXPR) {
 		fmt.print(")")
 	}
 }
-
-main :: proc() {
-	fmt.println()
-	buf: [64]byte
-
-
-	for {
-		fmt.print("> ")
-		n, _ := os.read(os.stdin, buf[:])
-		code := string(buf[:n])
-		code = strings.trim_space(code);
-		when MOD_QUIT {
-			if code == "q" {
-				return
-			}
-		}
-
-		beta_reduced := parse(code)
-
-		fmt.print("-> ")
-		log(beta_reduced)
-		fmt.println()
-		when MOD_INTERNALS {
-			fmt.println("-> ", beta_reduced)
-		}
-		fmt.println()
-	}
-}
-
-// 
-// H E L P E R     F U N C T I O N S
-// 
 
 findClosing :: proc (expr : string, start : int) -> int {
 	if expr[start] != '(' || len(expr) < start+1 {
