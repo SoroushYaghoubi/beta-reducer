@@ -169,10 +169,12 @@ main :: proc() {
 		log(parsed_expr)
 		fmt.println()
 		reduced_expr := reduce(parsed_expr)
+		fmt.print("-> ")
 		log(reduced_expr)
 		when MOD_INTERNALS {
 			fmt.println("-> ", parsed_expr)
 		}
+		fmt.println()
 		fmt.println()
 	}
 }
